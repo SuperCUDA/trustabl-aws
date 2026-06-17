@@ -1,0 +1,39 @@
+version: 0.2
+
+# Trustabl — AWS CodeBuild buildspec (CodePipeline).
+#
+# Runs the trustabl static reliability/safety scanner over the source and gates
+# the build on risk/severity. Add a CodeBuild action that uses this buildspec to
+# a CodePipeline Build/Test stage.
+#
+# SETUP: vendor the plugin's `scan/` directory next to this file in your repo
+# (the buildspec runs `scan/trustabl-scan.sh` from the source checkout).
+#
+# Inputs are environment variables (set on the CodeBuild project or action):
+#   TARGET (default "."), VERSION (default "latest"), DETECTORS, STRICT,
+#   RULES_REF, RULES_REPO, SARIF_FILE, JSON_FILE,
+#   RISK_SCORE_THRESHOLD (default 0), SEVERITY_THRESHOLD (default none),
+#   GITHUB_TOKEN (optional — dodges GitHub's 60 req/hr anon rate limit).
+
+env:
+  variables:
+    TARGET: "."
+    VERSION: "latest"
+    SEVERITY_THRESHOLD: "none"
+    RISK_SCORE_THRESHOLD: "0"
+
+phases:
+  install:
+    commands:
+      - command -v jq   >/dev/null 2>&1 || { yum -y install jq   || (apt-get update && apt-get -y install jq);   } >/dev/null 2>&1 || true
+      - command -v curl >/dev/null 2>&1 || { yum -y install curl || (apt-get update && apt-get -y install curl); } >/dev/null 2>&1 || true
+  build:
+    commands:
+      - bash "$CODEBUILD_SRC_DIR/scan/trustabl-scan.sh"
+
+artifacts:
+  name: trustabl-scan-results
+  files:
+    - trustabl.json
+    - trustabl.sarif
+    - trustabl-summary.md

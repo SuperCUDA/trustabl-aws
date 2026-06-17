@@ -1,0 +1,47 @@
+Name: Trustabl
+SchemaVersion: "1.0"
+
+# Trustabl — Amazon CodeCatalyst workflow.
+#
+# Runs the trustabl scanner over WorkflowSource on every push to main and gates
+# the run on risk/severity. Vendor the plugin's `scan/` directory into your repo
+# (this action runs `scan/trustabl-scan.sh` from the source checkout).
+
+Triggers:
+  - Type: PUSH
+    Branches:
+      - main
+
+Actions:
+  Trustabl_Scan:
+    Identifier: aws/build@v1
+    Inputs:
+      Sources:
+        - WorkflowSource
+      Variables:
+        - Name: TARGET
+          Value: "."
+        - Name: VERSION
+          Value: "latest"
+        - Name: SEVERITY_THRESHOLD
+          Value: "none"
+        - Name: RISK_SCORE_THRESHOLD
+          Value: "0"
+    Configuration:
+      Steps:
+        - Run: bash scan/trustabl-scan.sh
+    Outputs:
+      Artifacts:
+        - Name: trustabl-results
+          Files:
+            - trustabl.json
+            - trustabl.sarif
+            - trustabl-summary.md
+      # Surfaces findings in the CodeCatalyst Reports tab.
+      # NOTE: verify the SARIF report Format enum against current CodeCatalyst
+      # docs before relying on it (the schema evolves).
+      Reports:
+        trustabl-sarif:
+          Format: SARIFSCA
+          IncludePaths:
+            - trustabl.sarif

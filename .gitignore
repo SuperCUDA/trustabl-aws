@@ -1,0 +1,13 @@
+# scan artifacts
+trustabl.json
+trustabl.sarif
+trustabl-summary.md
+trustabl.env
+.trustabl-bin/
+trustabl/
+# Claude tooling
+CLAUDE.md
+.claude/
+.claude-*
+# OS
+*.stackdump
