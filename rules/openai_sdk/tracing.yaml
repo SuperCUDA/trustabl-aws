@@ -1,0 +1,45 @@
+# Vendored reference copy — see rules/README.md.
+# Canonical source: https://github.com/trustabl/trustabl-rules (openai_sdk/tracing.yaml)
+# This file carries ONLY the rule(s) added in the SuperCUDA/trustabl-rules
+# "feat/openai-sdk-reliability-rules" change, not the full upstream pack.
+policy:
+  id: openai_sdk_tracing
+  name: OpenAI Agents SDK tracing configuration
+  category: openai_sdk
+  description: >
+    Repo-scoped rules for OpenAI Agents SDK tracing behavior.
+rules:
+  - id: OAI-203
+    title: OpenAI Agents project uses default tracing with no agent-guidance doc
+    severity: medium
+    confidence: 0.7
+    language: python
+    applies_to:
+      - openai_agents
+    scope: repo
+    match:
+      all:
+        - repo_has_sdk_in_code:
+            - openai_agents
+        - repo_uses_default_tracing: true
+        - not:
+            repo_component_present:
+              - agents_md
+              - claude_md
+    explanation: >
+      This project uses the OpenAI Agents SDK with default tracing left on — so
+      inputs, tool calls, tool outputs, and agent responses are sent to OpenAI's
+      hosted tracing backend (see OAI-201) — AND it ships no agent-guidance doc
+      (AGENTS.md or CLAUDE.md, see OAI-202) that would record a tracing or
+      redaction policy. The combination is the risk this rule isolates: a
+      standing data-egress channel for potentially sensitive material (PII,
+      credentials, internal documents) with nothing in-tree telling an operator
+      or an editing agent that tracing is on, what it captures, or how to redact
+      it. OAI-201 and OAI-202 each fire on one half; OAI-203 marks the specific
+      pairing that turns an easy-to-miss default into an undocumented leak.
+    fix: >
+      Either disable tracing (OPENAI_AGENTS_DISABLE_TRACING=1) or register a
+      redacting trace processor via agents.tracing.add_trace_processor(...), AND
+      add an AGENTS.md/CLAUDE.md that states the tracing policy — whether traces
+      leave the process, what is redacted, and how to turn it off — so the
+      decision is documented for the next operator or agent.

@@ -1,0 +1,41 @@
+# Vendored reference copy — see rules/README.md.
+# Canonical source: https://github.com/trustabl/trustabl-rules (openai_sdk/network.yaml)
+# This file carries ONLY the rule(s) added in the SuperCUDA/trustabl-rules
+# "feat/openai-sdk-reliability-rules" change, not the full upstream pack.
+policy:
+  id: openai_sdk_network
+  name: OpenAI Agents SDK network hygiene
+  category: openai_sdk
+  description: >
+    Rules covering outbound network calls made from inside OpenAI Agents SDK
+    tools. The SDK does not enforce timeouts; they must be set explicitly.
+rules:
+  - id: OAI-029
+    title: aiohttp session write has no timeout
+    severity: high
+    confidence: 0.85
+    language: python
+    applies_to:
+      - openai_tool
+    scope: tool
+    match:
+      call_without_kwarg:
+        callees:
+          - aiohttp.ClientSession.put
+          - aiohttp.ClientSession.delete
+          - aiohttp.ClientSession.patch
+          - aiohttp.ClientSession.request
+        missing: timeout
+    explanation: >
+      An OpenAI Agents SDK tool issues a mutating aiohttp request
+      (put/delete/patch/request) with no timeout. OAI-005 covers the aiohttp
+      GET/POST read path plus the requests/httpx clients; this rule closes the
+      same gap for the aiohttp write verbs. aiohttp applies no default total
+      timeout, so a slow or unresponsive host blocks the tool's coroutine
+      indefinitely, stalling the agent's run loop and tying up the worker while
+      a mutation is in flight. A kwarg present with literal None counts as
+      missing.
+    fix: >
+      Pass a bounded timeout — either timeout=aiohttp.ClientTimeout(total=...)
+      on the call, or a ClientTimeout on the ClientSession. Surface the timeout
+      as a structured tool error the model can react to.

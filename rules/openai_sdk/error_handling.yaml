@@ -1,0 +1,47 @@
+# Vendored reference copy — see rules/README.md.
+# Canonical source: https://github.com/trustabl/trustabl-rules (openai_sdk/error_handling.yaml)
+# This file carries ONLY the rule(s) added in the SuperCUDA/trustabl-rules
+# "feat/openai-sdk-reliability-rules" change, not the full upstream pack.
+policy:
+  id: openai_sdk_error_handling
+  name: OpenAI Agents SDK error contract hygiene
+  category: openai_sdk
+  description: >
+    Rules covering how an OpenAI Agents SDK tool surfaces failures back to the
+    model. Raising raw exceptions yields opaque error strings the model cannot
+    branch on intelligently.
+rules:
+  - id: OAI-025
+    title: Privileged tool has no error handling
+    severity: medium
+    confidence: 0.6
+    language: python
+    applies_to:
+      - openai_tool
+    scope: tool
+    match:
+      all:
+        - any:
+            - has_shell_call: true
+            - has_code_exec_call: true
+            - has_write_call: true
+        - not:
+            has_try_except: true
+    explanation: >
+      This @function_tool performs a privileged operation — it spawns a
+      subprocess, evaluates dynamic code, or writes the filesystem — with no
+      try/except around it. When that operation fails (a non-zero exit, a
+      SyntaxError, a PermissionError, a partial write), the raw exception
+      propagates out of the tool and the SDK surfaces it to the model as an
+      opaque error string. The model cannot branch on the failure, and the
+      message frequently carries operational detail — absolute paths, the argv
+      that was run, a stack trace — across the trust boundary to whatever
+      consumes the agent's output. This complements OAI-008, which flags an
+      explicit `raise` with no handler; OAI-025 covers the exception thrown by
+      the privileged call itself, which OAI-008's has_raise signal does not see.
+    fix: >
+      Wrap the privileged call in try/except, catch the concrete failure modes
+      (subprocess.CalledProcessError, OSError, SyntaxError, …), and return a
+      structured payload such as {"error": "...", "retryable": False} the model
+      can act on. Pair with needs_approval (OAI-014) so the operation is gated
+      as well as handled.

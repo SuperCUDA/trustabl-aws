@@ -1,0 +1,37 @@
+# Vendored reference copy — see rules/README.md.
+# Canonical source: https://github.com/trustabl/trustabl-rules (openai_sdk/shell_safety.yaml)
+# This file carries ONLY the rule(s) added in the SuperCUDA/trustabl-rules
+# "feat/openai-sdk-reliability-rules" change, not the full upstream pack.
+policy:
+  id: openai_sdk_shell_safety
+  name: OpenAI Agents SDK shell invocation safety
+  category: openai_sdk
+  description: >
+    Rules covering tool bodies that spawn OS processes. Process spawn from
+    inside an @function_tool is a wide attack surface — command injection,
+    arbitrary execution, and unbounded resource use — with no SDK-level
+    sandbox.
+rules:
+  - id: OAI-028
+    title: TypeScript tool spawns a subprocess
+    severity: high
+    confidence: 0.9
+    language: typescript
+    applies_to:
+      - openai_tool
+    scope: tool
+    match:
+      has_shell_call: true
+    explanation: >
+      This OpenAI Agents SDK tool, authored in TypeScript, invokes a
+      child-process API (child_process exec/execSync/execFile/spawn/fork).
+      Because the model chooses the arguments passed to the tool, a
+      prompt-injected conversation can steer those values into an OS command;
+      shelling out from a model-callable tool turns the agent into an
+      arbitrary-command primitive on its host, with no SDK-level sandbox. This
+      is the TypeScript analogue of OAI-012, which covers the Python case only.
+    fix: >
+      Avoid shelling out from tools. If a subprocess is unavoidable, pass
+      arguments as an argv array (never a shell string), drop `shell: true`,
+      validate inputs against a strict allow-list, gate the tool with
+      needs_approval, and run under a sandbox with no ambient credentials.
