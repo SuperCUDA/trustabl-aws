@@ -1,0 +1,50 @@
+# Vendored reference copy — see rules/README.md.
+# Canonical source: https://github.com/trustabl/trustabl-rules (openai_sdk/approvals.yaml)
+# This file carries ONLY the rule(s) added in the SuperCUDA/trustabl-rules
+# "feat/openai-sdk-reliability-rules" change, not the full upstream pack.
+policy:
+  id: openai_sdk_approvals
+  name: OpenAI Agents SDK tool approval gates
+  category: openai_sdk
+  description: >
+    Rules covering the human-in-the-loop approval gate the OpenAI Agents SDK
+    offers on sensitive tool calls. The SDK exposes needs_approval on
+    @function_tool (and on hosted tools); its default is False everywhere, so a
+    privileged tool ships un-gated unless the author opts in.
+rules:
+  - id: OAI-027
+    title: Network-egress tool has no needs_approval gate
+    severity: high
+    confidence: 0.6
+    language: python
+    applies_to:
+      - openai_tool
+    scope: tool
+    match:
+      all:
+        - has_dynamic_url_call: true
+        - any:
+            - not:
+                tool_decorator_kwarg_present:
+                  - needs_approval
+            - tool_decorator_kwarg_value:
+                kwarg: needs_approval
+                value: "False"
+    explanation: >
+      This @function_tool issues an HTTP request to a URL built from a
+      non-literal value — typically a model-supplied tool argument — and has no
+      needs_approval gate (the kwarg is absent or explicitly False). A tool that
+      fetches a caller-influenced URL is an SSRF and data-exfiltration surface
+      (see OAI-018): the model can be steered to an internal address the agent's
+      egress can reach, and request bodies and headers leak to whatever host the
+      URL resolves to. needs_approval is the SDK's human-in-the-loop checkpoint;
+      without it the request fires with no human in the loop. OAI-014 gates
+      shell/code/write tools this way — OAI-027 extends the same gate to network
+      egress, which OAI-014 does not cover. Passing True or a per-call approval
+      callable both count as a gate and do not fire.
+    fix: >
+      Pass needs_approval=True (or a per-call approval callable) to the
+      @function_tool decorator for tools that fetch model-influenced URLs, and
+      handle the approval items in your run loop. Additionally validate the URL
+      against an allow-list of hosts (see OAI-018) so an approved call still
+      cannot reach internal addresses.

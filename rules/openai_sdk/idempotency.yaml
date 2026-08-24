@@ -1,0 +1,54 @@
+# Vendored reference copy — see rules/README.md.
+# Canonical source: https://github.com/trustabl/trustabl-rules (openai_sdk/idempotency.yaml)
+# This file carries ONLY the rule(s) added in the SuperCUDA/trustabl-rules
+# "feat/openai-sdk-reliability-rules" change, not the full upstream pack.
+policy:
+  id: openai_sdk_idempotency
+  name: OpenAI Agents SDK mutating-tool idempotency
+  category: openai_sdk
+  description: >
+    Rules that flag mutating OpenAI Agents SDK tools without an idempotency
+    key. Agents retry tool calls under timeouts and ambiguous failures; without
+    a key the same side-effecting action can fire more than once.
+rules:
+  - id: OAI-026
+    title: Exact-named mutating tool has no idempotency key
+    severity: medium
+    confidence: 0.55
+    language: python
+    applies_to:
+      - openai_tool
+    scope: tool
+    match:
+      all:
+        - name_in:
+            - pay
+            - refund
+            - charge
+            - transfer
+            - checkout
+            - purchase
+            - cancel
+            - submit
+        - not:
+            param_name_matches:
+              contains:
+                - idempot
+              exact:
+                - request_id
+                - txn_id
+    explanation: >
+      This tool's name is a bare mutation verb (pay, refund, charge, transfer,
+      checkout, …) and it exposes no idempotency-key parameter. OAI-009 catches
+      mutating tools whose names carry a create_/send_/refund_ prefix, but a
+      tool named exactly `refund` or `charge` has no trailing separator and
+      slips past that prefix match — yet it is just as side-effecting. Agents
+      re-invoke tools when a result reads as inconclusive, and an orchestrator
+      or a lost response (at-least-once delivery) re-issues calls after a
+      timeout; without a key threaded to the backing API the same payment,
+      transfer, or cancellation fires twice.
+    fix: >
+      Add an `idempotency_key: str` parameter and forward it to the backing API
+      (Stripe Idempotency-Key, REST X-Request-ID, GraphQL clientMutationId). If
+      the downstream service ignores the key, dedupe in your own store keyed by
+      the token before issuing the call.
